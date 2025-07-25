@@ -138,7 +138,7 @@ mysql:
     prefix: ""
     port: "3306"
     config: charset=utf8mb4&parseTime=True&loc=Local
-    db-name: panel
+    db-name: 123
     username: root
     password: cd423a2933d92b70
     path: 14.103.168.20

@@ -206,10 +206,10 @@ const handleSync = async () => {
     
     clearInterval(progressInterval)
     progress.value = 100
-    progressStatus.value = response.code === 200 ? 'success' : 'exception'
-    progressText.value = response.code === 200 ? '同步完成' : '同步失败'
+    progressStatus.value = response.code === 0 ? 'success' : 'exception'
+    progressText.value = response.code === 0 ? '同步完成' : '同步失败'
     
-    if (response.code === 200) {
+    if (response.code === 0) {
       syncResult.value = {
         success: true,
         message: response.msg,

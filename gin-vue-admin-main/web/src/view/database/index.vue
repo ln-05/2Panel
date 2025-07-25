@@ -1,31 +1,5 @@
 <template>
   <div class="database-container">
-    <!-- 顶部标签页 -->
-    <div class="database-tabs">
-      <el-tabs v-model="activeTab" @tab-click="handleTabClick">
-        <el-tab-pane label="全部" name="all">
-          <template #label>
-            <span class="tab-label">全部</span>
-          </template>
-        </el-tab-pane>
-        <el-tab-pane label="MySQL" name="mysql">
-          <template #label>
-            <span class="tab-label">MySQL</span>
-          </template>
-        </el-tab-pane>
-        <el-tab-pane label="PostgreSQL" name="postgresql">
-          <template #label>
-            <span class="tab-label">PostgreSQL</span>
-          </template>
-        </el-tab-pane>
-        <el-tab-pane label="Redis" name="redis">
-          <template #label>
-            <span class="tab-label">Redis</span>
-          </template>
-        </el-tab-pane>
-      </el-tabs>
-    </div>
-
     <!-- 操作按钮和搜索栏 -->
     <div class="action-bar">
       <div class="action-buttons">
@@ -50,8 +24,33 @@
       </div>
     </div>
 
-    <!-- 数据库列表 -->
+    <!-- 顶部标签页和数据库列表 -->
     <div class="database-content">
+      <div class="database-tabs">
+        <el-tabs v-model="activeTab" @tab-click="handleTabClick">
+          <el-tab-pane label="全部" name="all">
+            <template #label>
+              <span class="tab-label">全部</span>
+            </template>
+          </el-tab-pane>
+          <el-tab-pane label="MySQL" name="mysql">
+            <template #label>
+              <span class="tab-label">MySQL</span>
+            </template>
+          </el-tab-pane>
+          <el-tab-pane label="PostgreSQL" name="postgresql">
+            <template #label>
+              <span class="tab-label">PostgreSQL</span>
+            </template>
+          </el-tab-pane>
+          <el-tab-pane label="Redis" name="redis">
+            <template #label>
+              <span class="tab-label">Redis</span>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+      </div>
+
       <div class="filter-section">
         <el-select 
           v-model="filterType" 
@@ -91,10 +90,10 @@
           <el-table-column label="状态" width="80">
             <template #default="scope">
               <el-tag 
-                :type="scope.row.status === 'active' ? 'success' : 'danger'"
+                :type="scope.row.status === 'online' ? 'success' : (scope.row.status === 'offline' ? 'danger' : 'info')"
                 size="small"
               >
-                {{ scope.row.status === 'active' ? '在线' : '离线' }}
+                {{ scope.row.status === 'online' ? '在线' : (scope.row.status === 'offline' ? '离线' : '未知') }}
               </el-tag>
             </template>
           </el-table-column>
@@ -226,15 +225,20 @@ const loadDatabaseList = async () => {
     loading.value = true
     const params = {
       page: currentPage.value,
-      page_size: pageSize.value,
-      search: searchKeyword.value,
-      type_filter: filterType.value
+      pageSize: pageSize.value,
+      name: searchKeyword.value,
+      type: filterType.value
     }
     
+    console.log('发送请求参数:', params)
     const response = await getDatabaseList(params)
-    if (response.code === 200) {
+    console.log('接收到响应:', response)
+    
+    if (response.code === 0) {
       tableData.value = response.data?.list || []
       total.value = response.data?.total || 0
+      console.log('设置表格数据:', tableData.value)
+      console.log('总数:', total.value)
     } else {
       ElMessage.error(response.msg || '获取数据库列表失败')
     }
@@ -275,20 +279,21 @@ const handleDelete = (database) => {
 const handleTest = async (database) => {
   try {
     loading.value = true
-    const response = await testDatabase({ database_id: database.id })
-    if (response.code === 200) {
+    const databaseId = database.ID || database.id
+    const response = await testDatabase({ id: databaseId })
+    if (response.code === 0) {
       ElMessage.success('连接测试成功')
       // 更新数据库状态
-      const index = tableData.value.findIndex(item => item.id === database.id)
+      const index = tableData.value.findIndex(item => (item.ID || item.id) === databaseId)
       if (index !== -1) {
-        tableData.value[index].status = 'active'
+        tableData.value[index].status = 'online'
       }
     } else {
       ElMessage.error(response.msg || '连接测试失败')
       // 更新数据库状态
-      const index = tableData.value.findIndex(item => item.id === database.id)
+      const index = tableData.value.findIndex(item => (item.ID || item.id) === databaseId)
       if (index !== -1) {
-        tableData.value[index].status = 'inactive'
+        tableData.value[index].status = 'offline'
       }
     }
   } catch (error) {

@@ -218,7 +218,7 @@ watch(() => props.database, (newDatabase) => {
   console.log('当前模式:', props.mode)
   if (newDatabase && Object.keys(newDatabase).length > 0) {
     Object.assign(form, {
-      id: newDatabase.id || null,
+      id: newDatabase.ID || newDatabase.id || null,
       name: newDatabase.name || '',
       type: newDatabase.type || 'mysql',
       host: newDatabase.host || 'localhost',
@@ -250,8 +250,8 @@ const handleTestConnection = async () => {
     
     // 如果是编辑模式且有ID，使用现有连接测试
     if (props.mode === 'edit' && form.id) {
-      const response = await testDatabase({ database_id: form.id })
-      if (response.code === 200) {
+      const response = await testDatabase({ id: form.id })
+      if (response.code === 0) {
         ElMessage.success('连接测试成功')
         connectionValid.value = true
       } else {
@@ -274,10 +274,10 @@ const handleTestConnection = async () => {
       
       // 先创建连接
       const createResponse = await createDatabase(tempData)
-      if (createResponse.code === 200) {
+      if (createResponse.code === 0) {
         // 创建成功后测试连接
-        const testResponse = await testDatabase({ database_id: createResponse.data.id })
-        if (testResponse.code === 200) {
+        const testResponse = await testDatabase({ id: createResponse.data.id })
+        if (testResponse.code === 0) {
           ElMessage.success('连接测试成功')
           connectionValid.value = true
           // 保存临时创建的ID，用于后续保存时更新而不是重复创建
@@ -338,7 +338,7 @@ const handleSave = async () => {
       })
     }
     
-    if (response.code === 200) {
+    if (response.code === 0) {
       ElMessage.success(response.msg || '保存成功')
       emit('save')
       handleClose()

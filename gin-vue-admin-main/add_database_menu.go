@@ -16,7 +16,7 @@ func main() {
 	initialize.OtherInit()
 	global.GVA_LOG = core.Zap()
 	global.GVA_DB = initialize.Gorm()
-	
+
 	db := global.GVA_DB
 
 	// 1. 添加父级菜单：数据库管理
@@ -95,4 +95,4 @@ func main() {
 
 	fmt.Println("数据库管理菜单添加完成！")
 	fmt.Println("请重启 gin-vue-admin 服务，然后登录查看菜单。")
-} 
+}

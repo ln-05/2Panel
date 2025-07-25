@@ -59,16 +59,20 @@ const visible = computed({
 
 // 方法
 const handleConfirm = async () => {
-  if (!props.database?.id) {
+  console.log('删除数据库对象:', props.database)
+  console.log('数据库ID:', props.database?.ID || props.database?.id)
+  
+  const databaseId = props.database?.ID || props.database?.id
+  if (!databaseId) {
     ElMessage.error('数据库ID不存在')
     return
   }
   
   try {
     deleting.value = true
-    const response = await deleteDatabase({ id: props.database.id })
+    const response = await deleteDatabase({ ids: [databaseId] })
     
-    if (response.code === 200) {
+    if (response.code === 0) {
       ElMessage.success(response.msg || '删除成功')
       emit('confirm')
       handleClose()
