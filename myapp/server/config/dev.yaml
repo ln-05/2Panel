@@ -1,0 +1,6 @@
+Mysql:
+  User: root
+  Password: cd423a2933d92b70
+  Host: 14.103.168.20
+  Port: 3306
+  Database: 123

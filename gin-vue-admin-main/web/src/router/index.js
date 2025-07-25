@@ -24,6 +24,7 @@ const routes = [
     },
     component: () => import('@/view/example/upload/scanUpload.vue')
   },
+
   {
     path: '/:catchAll(.*)',
     meta: {
