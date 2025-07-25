@@ -7,7 +7,7 @@ aliyun-oss:
     base-path: yourBasePath
 autocode:
     web: web/src
-    root: D:\gowork\src\2panel\gin-vue-admin-main
+    root: D:\gowork\src\123\gin-vue-admin-main
     server: server
     module: github.com/flipped-aurora/gin-vue-admin/server
     ai-path: ""
@@ -84,7 +84,7 @@ hua-wei-obs:
     access-key: you-access-key
     secret-key: you-secret-key
 jwt:
-    signing-key: e7325216-1711-451f-a6c1-c4b027ff5d0b
+    signing-key: 2d14ea04-8b99-47d9-b129-067a07c98b17
     expires-time: 7d
     buffer-time: 1d
     issuer: qmPlus
@@ -138,7 +138,7 @@ mysql:
     prefix: ""
     port: "3306"
     config: charset=utf8mb4&parseTime=True&loc=Local
-    db-name: panel
+    db-name: "123"
     username: root
     password: cd423a2933d92b70
     path: 14.103.168.20
@@ -246,3 +246,13 @@ zap:
     show-line: true
     log-in-console: true
     retention-day: -1
+docker:
+    host: "tcp://14.103.168.20:2376"
+    version: "1.41"
+    tls-verify: false
+    cert-path: ""
+    timeout: 60
+
+
+
+

@@ -188,6 +188,35 @@ func (i *initApi) InitializeData(ctx context.Context) (context.Context, error) {
 		{ApiGroup: "媒体库分类", Method: "GET", Path: "/attachmentCategory/getCategoryList", Description: "分类列表"},
 		{ApiGroup: "媒体库分类", Method: "POST", Path: "/attachmentCategory/addCategory", Description: "添加/编辑分类"},
 		{ApiGroup: "媒体库分类", Method: "POST", Path: "/attachmentCategory/deleteCategory", Description: "删除分类"},
+
+		{ApiGroup: "Docker容器管理", Method: "GET", Path: "/docker/containers", Description: "获取容器列表"},
+		{ApiGroup: "Docker容器管理", Method: "GET", Path: "/docker/containers/:id", Description: "获取容器详细信息"},
+		{ApiGroup: "Docker容器管理", Method: "GET", Path: "/docker/containers/:id/logs", Description: "获取容器日志"},
+		{ApiGroup: "Docker容器管理", Method: "POST", Path: "/docker/containers/:id/start", Description: "启动容器"},
+		{ApiGroup: "Docker容器管理", Method: "POST", Path: "/docker/containers/:id/stop", Description: "停止容器"},
+		{ApiGroup: "Docker容器管理", Method: "POST", Path: "/docker/containers/:id/restart", Description: "重启容器"},
+		{ApiGroup: "Docker容器管理", Method: "DELETE", Path: "/docker/containers/:id", Description: "删除容器"},
+		{ApiGroup: "Docker容器管理", Method: "GET", Path: "/docker/info", Description: "获取Docker系统信息"},
+		{ApiGroup: "Docker容器管理", Method: "GET", Path: "/docker/status", Description: "检查Docker状态"},
+
+		{ApiGroup: "Docker镜像管理", Method: "GET", Path: "/docker/images", Description: "获取镜像列表"},
+		{ApiGroup: "Docker镜像管理", Method: "GET", Path: "/docker/images/:id", Description: "获取镜像详细信息"},
+		{ApiGroup: "Docker镜像管理", Method: "POST", Path: "/docker/images/pull", Description: "拉取镜像"},
+		{ApiGroup: "Docker镜像管理", Method: "DELETE", Path: "/docker/images/:id", Description: "删除镜像"},
+		{ApiGroup: "Docker镜像管理", Method: "POST", Path: "/docker/images/tag", Description: "给镜像打标签"},
+		{ApiGroup: "Docker镜像管理", Method: "POST", Path: "/docker/images/prune", Description: "清理未使用的镜像"},
+
+		{ApiGroup: "Docker网络管理", Method: "GET", Path: "/docker/networks", Description: "获取网络列表"},
+		{ApiGroup: "Docker网络管理", Method: "GET", Path: "/docker/networks/:id", Description: "获取网络详细信息"},
+		{ApiGroup: "Docker网络管理", Method: "POST", Path: "/docker/networks", Description: "创建网络"},
+		{ApiGroup: "Docker网络管理", Method: "DELETE", Path: "/docker/networks/:id", Description: "删除网络"},
+		{ApiGroup: "Docker网络管理", Method: "POST", Path: "/docker/networks/prune", Description: "清理未使用的网络"},
+
+		{ApiGroup: "Docker存储卷管理", Method: "GET", Path: "/docker/volumes", Description: "获取存储卷列表"},
+		{ApiGroup: "Docker存储卷管理", Method: "GET", Path: "/docker/volumes/:name", Description: "获取存储卷详细信息"},
+		{ApiGroup: "Docker存储卷管理", Method: "POST", Path: "/docker/volumes", Description: "创建存储卷"},
+		{ApiGroup: "Docker存储卷管理", Method: "DELETE", Path: "/docker/volumes/:name", Description: "删除存储卷"},
+		{ApiGroup: "Docker存储卷管理", Method: "POST", Path: "/docker/volumes/prune", Description: "清理未使用的存储卷"},
 	}
 	if err := db.Create(&entities).Error; err != nil {
 		return ctx, errors.Wrap(err, sysModel.SysApi{}.TableName()+"表数据初始化失败!")
@@ -201,7 +230,8 @@ func (i *initApi) DataInserted(ctx context.Context) bool {
 	if !ok {
 		return false
 	}
-	if errors.Is(db.Where("path = ? AND method = ?", "/authorityBtn/canRemoveAuthorityBtn", "POST").
+	// 检查最新添加的Docker存储卷API是否存在
+	if errors.Is(db.Where("path = ? AND method = ?", "/docker/volumes/prune", "POST").
 		First(&sysModel.SysApi{}).Error, gorm.ErrRecordNotFound) {
 		return false
 	}

@@ -5,6 +5,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"sync"
 
+	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
 	"github.com/qiniu/qmgo"
 
@@ -37,6 +38,7 @@ var (
 	GVA_ROUTERS             gin.RoutesInfo
 	GVA_ACTIVE_DBNAME       *string
 	GVA_MCP_SERVER          *server.MCPServer
+	GVA_DOCKER              *client.Client
 	BlackCache              local_cache.Cache
 	lock                    sync.RWMutex
 )

@@ -53,6 +53,7 @@ func Routers() *gin.Engine {
 
 	systemRouter := router.RouterGroupApp.System
 	exampleRouter := router.RouterGroupApp.Example
+	dockerRouter := router.RouterGroupApp.Docker
 	// 如果想要不使用nginx代理前端网页，可以修改 web/.env.production 下的
 	// VUE_APP_BASE_API = /
 	// VUE_APP_BASE_PATH = http://localhost
@@ -71,10 +72,13 @@ func Routers() *gin.Engine {
 	global.GVA_LOG.Info("register swagger handler")
 	// 方便统一添加路由组前缀 多服务器上线使用
 
-	PublicGroup := Router.Group(global.GVA_CONFIG.System.RouterPrefix)
-	PrivateGroup := Router.Group(global.GVA_CONFIG.System.RouterPrefix)
+	PublicGroup := Router.Group("/")
+	PrivateGroup := Router.Group("/")
 
 	PrivateGroup.Use(middleware.JWTAuth()).Use(middleware.CasbinHandler())
+
+	// 注册自定义容器路由
+	router.RegisterContainerRouter(PrivateGroup)
 
 	{
 		// 健康监测
@@ -103,6 +107,11 @@ func Routers() *gin.Engine {
 		systemRouter.InitAuthorityBtnRouterRouter(PrivateGroup)             // 按钮权限管理
 		systemRouter.InitSysExportTemplateRouter(PrivateGroup, PublicGroup) // 导出模板
 		systemRouter.InitSysParamsRouter(PrivateGroup, PublicGroup)         // 参数管理
+		dockerRouter.InitDockerContainerRouter(PrivateGroup)                // Docker容器管理路由
+		dockerRouter.InitDockerImageRouter(PrivateGroup)                    // Docker镜像管理路由
+		dockerRouter.InitDockerNetworkRouter(PrivateGroup)                  // Docker网络管理路由
+		dockerRouter.InitDockerVolumeRouter(PrivateGroup)                   // Docker存储卷管理路由
+		dockerRouter.InitDockerRegistryRouter(PrivateGroup)                 // Docker仓库管理路由
 		exampleRouter.InitCustomerRouter(PrivateGroup)                      // 客户路由
 		exampleRouter.InitFileUploadAndDownloadRouter(PrivateGroup)         // 文件上传下载功能路由
 		exampleRouter.InitAttachmentCategoryRouterRouter(PrivateGroup)      // 文件上传下载分类
