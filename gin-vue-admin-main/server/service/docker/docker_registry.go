@@ -2,202 +2,212 @@ package docker
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/flipped-aurora/gin-vue-admin/server/global"
-	dockerModel "github.com/flipped-aurora/gin-vue-admin/server/model/docker"
 	dockerReq "github.com/flipped-aurora/gin-vue-admin/server/model/docker/request"
 	dockerRes "github.com/flipped-aurora/gin-vue-admin/server/model/docker/response"
 	"go.uber.org/zap"
-	"gorm.io/gorm"
 )
 
 type DockerRegistryService struct{}
 
-// GetRegistryList 获取仓库列表
+// GetRegistryList 获取仓库列表 - 从Docker配置和实际使用情况获取
 func (d *DockerRegistryService) GetRegistryList(filter dockerReq.RegistryFilter) ([]dockerRes.RegistryInfo, int64, error) {
-	var registries []dockerModel.DockerRegistry
-	var total int64
+	global.GVA_LOG.Info("开始从Docker获取仓库列表")
+	
+	// 检查Docker客户端是否可用
+	if global.GVA_DOCKER == nil {
+		global.GVA_LOG.Error("Docker客户端不可用")
+		return nil, 0, fmt.Errorf("Docker client is not available")
+	}
 
-	db := global.GVA_DB.Model(&dockerModel.DockerRegistry{})
+	// 获取Docker系统信息
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	info, err := global.GVA_DOCKER.Info(ctx)
+	if err != nil {
+		global.GVA_LOG.Error("获取Docker系统信息失败", zap.Error(err))
+		return nil, 0, fmt.Errorf("获取Docker系统信息失败: %v", err)
+	}
+
+	// 构建仓库列表
+	var registries []dockerRes.RegistryInfo
+	registryMap := make(map[string]bool) // 用于去重
+	
+	// 添加默认的Docker Hub
+	dockerHub := dockerRes.RegistryInfo{
+		ID:          1,
+		Name:        "Docker Hub",
+		DownloadUrl: "https://registry-1.docker.io",
+		Protocol:    "https",
+		Status:      "active",
+		Description: "Docker官方仓库",
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	registries = append(registries, dockerHub)
+	registryMap["https://registry-1.docker.io"] = true
+
+	// 从Docker信息中获取配置的仓库镜像
+	if info.RegistryConfig != nil && len(info.RegistryConfig.Mirrors) > 0 {
+		global.GVA_LOG.Info("找到Docker镜像仓库", zap.Int("count", len(info.RegistryConfig.Mirrors)))
+		for _, mirror := range info.RegistryConfig.Mirrors {
+			if !registryMap[mirror] {
+				registry := dockerRes.RegistryInfo{
+					ID:          uint(len(registries) + 1),
+					Name:        d.getRegistryName(mirror),
+					DownloadUrl: mirror,
+					Protocol:    d.getProtocol(mirror),
+					Status:      "active",
+					Description: "Docker仓库镜像",
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}
+				registries = append(registries, registry)
+				registryMap[mirror] = true
+			}
+		}
+	}
+
+	// 从Docker信息中获取不安全的仓库
+	if info.RegistryConfig != nil && len(info.RegistryConfig.InsecureRegistryCIDRs) > 0 {
+		global.GVA_LOG.Info("找到不安全的Docker仓库", zap.Int("count", len(info.RegistryConfig.InsecureRegistryCIDRs)))
+		for _, insecure := range info.RegistryConfig.InsecureRegistryCIDRs {
+			insecureUrl := insecure.String()
+			if !registryMap[insecureUrl] {
+				registry := dockerRes.RegistryInfo{
+					ID:          uint(len(registries) + 1),
+					Name:        d.getRegistryName(insecureUrl),
+					DownloadUrl: insecureUrl,
+					Protocol:    "http",
+					Status:      "active",
+					Description: "不安全的Docker仓库",
+					CreatedAt:   time.Now(),
+					UpdatedAt:   time.Now(),
+				}
+				registries = append(registries, registry)
+				registryMap[insecureUrl] = true
+			}
+		}
+	}
+
+	// 从现有镜像中推断使用的仓库
+	images, err := global.GVA_DOCKER.ImageList(ctx, types.ImageListOptions{})
+	if err == nil {
+		global.GVA_LOG.Info("分析现有镜像以推断仓库", zap.Int("image_count", len(images)))
+		for _, image := range images {
+			for _, repoTag := range image.RepoTags {
+				if repoTag != "<none>:<none>" {
+					registryUrl := d.extractRegistryFromImage(repoTag)
+					if registryUrl != "" && !registryMap[registryUrl] {
+						registry := dockerRes.RegistryInfo{
+							ID:          uint(len(registries) + 1),
+							Name:        d.getRegistryName(registryUrl),
+							DownloadUrl: registryUrl,
+							Protocol:    d.getProtocol(registryUrl),
+							Status:      "detected",
+							Description: "从镜像推断的仓库",
+							CreatedAt:   time.Now(),
+							UpdatedAt:   time.Now(),
+						}
+						registries = append(registries, registry)
+						registryMap[registryUrl] = true
+					}
+				}
+			}
+		}
+	}
+
+	global.GVA_LOG.Info("从Docker获取到仓库数据", zap.Int("count", len(registries)))
 
 	// 应用过滤条件
-	if filter.Name != "" {
-		db = db.Where("name LIKE ?", "%"+filter.Name+"%")
-	}
-	if filter.Protocol != "" {
-		db = db.Where("protocol = ?", filter.Protocol)
+	var filteredRegistries []dockerRes.RegistryInfo
+	for _, registry := range registries {
+		// 名称过滤
+		if filter.Name != "" && !strings.Contains(registry.Name, filter.Name) {
+			continue
+		}
+		// 协议过滤
+		if filter.Protocol != "" && registry.Protocol != filter.Protocol {
+			continue
+		}
+		filteredRegistries = append(filteredRegistries, registry)
 	}
 
-	// 获取总数
-	if err := db.Count(&total).Error; err != nil {
-		global.GVA_LOG.Error("获取仓库总数失败", zap.Error(err))
-		return nil, 0, err
-	}
+	total := int64(len(filteredRegistries))
 
 	// 应用分页
 	if filter.Page > 0 && filter.PageSize > 0 {
-		offset := (filter.Page - 1) * filter.PageSize
-		db = db.Offset(offset).Limit(filter.PageSize)
+		start := (filter.Page - 1) * filter.PageSize
+		end := start + filter.PageSize
+		if start >= len(filteredRegistries) {
+			filteredRegistries = []dockerRes.RegistryInfo{}
+		} else {
+			if end > len(filteredRegistries) {
+				end = len(filteredRegistries)
+			}
+			filteredRegistries = filteredRegistries[start:end]
+		}
 	}
 
-	// 获取数据
-	if err := db.Order("created_at DESC").Find(&registries).Error; err != nil {
-		global.GVA_LOG.Error("获取仓库列表失败", zap.Error(err))
-		return nil, 0, err
-	}
-
-	// 转换为响应模型
-	registryInfos := make([]dockerRes.RegistryInfo, 0, len(registries))
-	for _, registry := range registries {
-		registryInfos = append(registryInfos, d.convertToRegistryInfo(registry))
-	}
-
-	return registryInfos, total, nil
+	global.GVA_LOG.Info("返回过滤后的仓库数据", zap.Int("filtered_count", len(filteredRegistries)), zap.Int64("total", total))
+	return filteredRegistries, total, nil
 }
 
 // GetRegistryDetail 获取仓库详细信息
 func (d *DockerRegistryService) GetRegistryDetail(id uint) (*dockerRes.RegistryDetail, error) {
-	var registry dockerModel.DockerRegistry
-	if err := global.GVA_DB.First(&registry, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("仓库不存在")
-		}
-		global.GVA_LOG.Error("获取仓库详情失败", zap.Uint("id", id), zap.Error(err))
+	// 从Docker API获取仓库列表
+	registries, _, err := d.GetRegistryList(dockerReq.RegistryFilter{})
+	if err != nil {
 		return nil, err
 	}
 
-	registryDetail := d.convertToRegistryDetail(registry)
-	return &registryDetail, nil
+	// 查找指定ID的仓库
+	for _, registry := range registries {
+		if registry.ID == id {
+			return &dockerRes.RegistryDetail{
+				RegistryInfo: registry,
+				IsDefault:    registry.ID == 1, // Docker Hub为默认仓库
+				LastTestTime: nil,
+				TestResult:   "",
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("仓库不存在")
 }
 
-// CreateRegistry 创建仓库
+// CreateRegistry 创建仓库 - Docker仓库配置应该在Docker配置文件中管理
 func (d *DockerRegistryService) CreateRegistry(createReq dockerReq.RegistryCreateRequest) (*dockerRes.RegistryInfo, error) {
-	// 检查名称是否已存在
-	var existingRegistry dockerModel.DockerRegistry
-	if err := global.GVA_DB.Where("name = ?", createReq.Name).First(&existingRegistry).Error; err == nil {
-		return nil, fmt.Errorf("仓库名称已存在")
-	}
-
-	// 验证下载地址格式
-	if !strings.HasPrefix(createReq.DownloadUrl, "http://") && !strings.HasPrefix(createReq.DownloadUrl, "https://") {
-		return nil, fmt.Errorf("下载地址格式不正确，必须以http://或https://开头")
-	}
-
-	// 创建仓库记录
-	registry := dockerModel.DockerRegistry{
-		Name:        createReq.Name,
-		DownloadUrl: createReq.DownloadUrl,
-		Protocol:    createReq.Protocol,
-		Username:    createReq.Username,
-		Password:    createReq.Password, // 实际项目中应该加密存储
-		Description: createReq.Description,
-		Status:      "active",
-	}
-
-	if err := global.GVA_DB.Create(&registry).Error; err != nil {
-		global.GVA_LOG.Error("创建仓库失败", zap.String("name", createReq.Name), zap.Error(err))
-		return nil, fmt.Errorf("创建仓库失败: %v", err)
-	}
-
-	global.GVA_LOG.Info("仓库创建成功", zap.String("name", createReq.Name), zap.Uint("id", registry.ID))
-
-	registryInfo := d.convertToRegistryInfo(registry)
-	return &registryInfo, nil
+	return nil, fmt.Errorf("Docker仓库配置应该在Docker daemon配置文件中管理")
 }
 
-// UpdateRegistry 更新仓库
+// UpdateRegistry 更新仓库 - Docker仓库配置应该在Docker配置文件中管理
 func (d *DockerRegistryService) UpdateRegistry(updateReq dockerReq.RegistryUpdateRequest) (*dockerRes.RegistryInfo, error) {
-	var registry dockerModel.DockerRegistry
-	if err := global.GVA_DB.First(&registry, updateReq.ID).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("仓库不存在")
-		}
-		return nil, err
-	}
-
-	// 检查名称是否与其他仓库冲突
-	var existingRegistry dockerModel.DockerRegistry
-	if err := global.GVA_DB.Where("name = ? AND id != ?", updateReq.Name, updateReq.ID).First(&existingRegistry).Error; err == nil {
-		return nil, fmt.Errorf("仓库名称已存在")
-	}
-
-	// 验证下载地址格式
-	if !strings.HasPrefix(updateReq.DownloadUrl, "http://") && !strings.HasPrefix(updateReq.DownloadUrl, "https://") {
-		return nil, fmt.Errorf("下载地址格式不正确，必须以http://或https://开头")
-	}
-
-	// 更新仓库信息
-	registry.Name = updateReq.Name
-	registry.DownloadUrl = updateReq.DownloadUrl
-	registry.Protocol = updateReq.Protocol
-	registry.Username = updateReq.Username
-	registry.Password = updateReq.Password // 实际项目中应该加密存储
-	registry.Description = updateReq.Description
-
-	if err := global.GVA_DB.Save(&registry).Error; err != nil {
-		global.GVA_LOG.Error("更新仓库失败", zap.Uint("id", updateReq.ID), zap.Error(err))
-		return nil, fmt.Errorf("更新仓库失败: %v", err)
-	}
-
-	global.GVA_LOG.Info("仓库更新成功", zap.Uint("id", updateReq.ID))
-
-	registryInfo := d.convertToRegistryInfo(registry)
-	return &registryInfo, nil
+	return nil, fmt.Errorf("Docker仓库配置应该在Docker daemon配置文件中管理")
 }
 
-// DeleteRegistry 删除仓库
+// DeleteRegistry 删除仓库 - Docker仓库配置应该在Docker配置文件中管理
 func (d *DockerRegistryService) DeleteRegistry(id uint) error {
-	var registry dockerModel.DockerRegistry
-	if err := global.GVA_DB.First(&registry, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("仓库不存在")
-		}
-		return err
-	}
-
-	// 检查是否为默认仓库
-	if registry.IsDefault {
-		return fmt.Errorf("不能删除默认仓库")
-	}
-
-	if err := global.GVA_DB.Delete(&registry).Error; err != nil {
-		global.GVA_LOG.Error("删除仓库失败", zap.Uint("id", id), zap.Error(err))
-		return fmt.Errorf("删除仓库失败: %v", err)
-	}
-
-	global.GVA_LOG.Info("仓库删除成功", zap.Uint("id", id))
-	return nil
+	return fmt.Errorf("Docker仓库配置应该在Docker daemon配置文件中管理")
 }
 
 // TestRegistry 测试仓库连接
 func (d *DockerRegistryService) TestRegistry(id uint) (*dockerRes.RegistryTestResponse, error) {
-	var registry dockerModel.DockerRegistry
-	if err := global.GVA_DB.First(&registry, id).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("仓库不存在")
-		}
+	// 获取仓库详情
+	registryDetail, err := d.GetRegistryDetail(id)
+	if err != nil {
 		return nil, err
 	}
 
 	// 测试连接
-	success, message := d.testRegistryConnection(registry)
-
-	// 更新测试结果
-	now := time.Now()
-	registry.LastTestTime = &now
-	registry.TestResult = message
-	if success {
-		registry.Status = "active"
-	} else {
-		registry.Status = "inactive"
-	}
-
-	global.GVA_DB.Save(&registry)
+	success, message := d.testRegistryConnection(registryDetail.RegistryInfo)
 
 	return &dockerRes.RegistryTestResponse{
 		Success: success,
@@ -205,24 +215,13 @@ func (d *DockerRegistryService) TestRegistry(id uint) (*dockerRes.RegistryTestRe
 	}, nil
 }
 
-// SetDefaultRegistry 设置默认仓库
+// SetDefaultRegistry 设置默认仓库 - Docker仓库配置应该在Docker配置文件中管理
 func (d *DockerRegistryService) SetDefaultRegistry(id uint) error {
-	// 先取消所有默认仓库
-	if err := global.GVA_DB.Model(&dockerModel.DockerRegistry{}).Where("is_default = ?", true).Update("is_default", false).Error; err != nil {
-		return err
-	}
-
-	// 设置新的默认仓库
-	if err := global.GVA_DB.Model(&dockerModel.DockerRegistry{}).Where("id = ?", id).Update("is_default", true).Error; err != nil {
-		return err
-	}
-
-	global.GVA_LOG.Info("设置默认仓库成功", zap.Uint("id", id))
-	return nil
+	return fmt.Errorf("Docker仓库配置应该在Docker daemon配置文件中管理")
 }
 
 // testRegistryConnection 测试仓库连接
-func (d *DockerRegistryService) testRegistryConnection(registry dockerModel.DockerRegistry) (bool, string) {
+func (d *DockerRegistryService) testRegistryConnection(registry dockerRes.RegistryInfo) (bool, string) {
 	// 构建测试URL
 	testUrl := registry.DownloadUrl
 	if !strings.HasSuffix(testUrl, "/") {
@@ -233,11 +232,6 @@ func (d *DockerRegistryService) testRegistryConnection(registry dockerModel.Dock
 	// 创建HTTP客户端
 	client := &http.Client{
 		Timeout: 10 * time.Second,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true, // 跳过SSL验证，实际项目中应该根据需要配置
-			},
-		},
 	}
 
 	// 创建请求
@@ -247,8 +241,9 @@ func (d *DockerRegistryService) testRegistryConnection(registry dockerModel.Dock
 	}
 
 	// 添加认证信息
-	if registry.Username != "" && registry.Password != "" {
-		req.SetBasicAuth(registry.Username, registry.Password)
+	if registry.Username != "" {
+		// 注意：这里没有密码信息，因为我们从Docker API获取的信息不包含密码
+		// 实际测试时可能需要用户手动输入认证信息
 	}
 
 	// 发送请求
@@ -267,27 +262,78 @@ func (d *DockerRegistryService) testRegistryConnection(registry dockerModel.Dock
 	return false, fmt.Sprintf("连接失败，状态码: %d", resp.StatusCode)
 }
 
-// convertToRegistryInfo 转换为RegistryInfo
-func (d *DockerRegistryService) convertToRegistryInfo(registry dockerModel.DockerRegistry) dockerRes.RegistryInfo {
-	return dockerRes.RegistryInfo{
-		ID:          registry.ID,
-		Name:        registry.Name,
-		DownloadUrl: registry.DownloadUrl,
-		Protocol:    registry.Protocol,
-		Status:      registry.Status,
-		Username:    registry.Username,
-		Description: registry.Description,
-		CreatedAt:   registry.CreatedAt,
-		UpdatedAt:   registry.UpdatedAt,
+// getRegistryName 根据URL生成仓库名称
+func (d *DockerRegistryService) getRegistryName(url string) string {
+	// 移除协议前缀
+	name := strings.TrimPrefix(url, "https://")
+	name = strings.TrimPrefix(name, "http://")
+	
+	// 移除路径
+	if idx := strings.Index(name, "/"); idx != -1 {
+		name = name[:idx]
+	}
+	
+	// 根据常见的仓库地址生成友好名称
+	switch {
+	case strings.Contains(name, "docker.io"):
+		return "Docker Hub"
+	case strings.Contains(name, "registry.cn-hangzhou.aliyuncs.com"):
+		return "阿里云容器镜像服务"
+	case strings.Contains(name, "ccr.ccs.tencentyun.com"):
+		return "腾讯云容器镜像服务"
+	case strings.Contains(name, "registry.cn-beijing.aliyuncs.com"):
+		return "阿里云容器镜像服务(北京)"
+	case strings.Contains(name, "registry.cn-shenzhen.aliyuncs.com"):
+		return "阿里云容器镜像服务(深圳)"
+	case strings.Contains(name, "dockerhub.azk8s.cn"):
+		return "Azure中国镜像"
+	case strings.Contains(name, "reg-mirror.qiniu.com"):
+		return "七牛云镜像"
+	case strings.Contains(name, "hub-mirror.c.163.com"):
+		return "网易云镜像"
+	case strings.Contains(name, "mirror.baidubce.com"):
+		return "百度云镜像"
+	default:
+		return name
 	}
 }
 
-// convertToRegistryDetail 转换为RegistryDetail
-func (d *DockerRegistryService) convertToRegistryDetail(registry dockerModel.DockerRegistry) dockerRes.RegistryDetail {
-	return dockerRes.RegistryDetail{
-		RegistryInfo: d.convertToRegistryInfo(registry),
-		IsDefault:    registry.IsDefault,
-		LastTestTime: registry.LastTestTime,
-		TestResult:   registry.TestResult,
+// getProtocol 从URL中提取协议
+func (d *DockerRegistryService) getProtocol(url string) string {
+	if strings.HasPrefix(url, "https://") {
+		return "https"
+	} else if strings.HasPrefix(url, "http://") {
+		return "http"
 	}
+	// 默认假设是https
+	return "https"
+}
+
+// extractRegistryFromImage 从镜像名称中提取仓库地址
+func (d *DockerRegistryService) extractRegistryFromImage(imageTag string) string {
+	// 分割镜像名称和标签
+	parts := strings.Split(imageTag, ":")
+	imageName := parts[0]
+	
+	// 如果镜像名称包含斜杠，可能包含仓库地址
+	if strings.Contains(imageName, "/") {
+		parts := strings.Split(imageName, "/")
+		
+		// 检查第一部分是否像仓库地址（包含点号或端口）
+		firstPart := parts[0]
+		if strings.Contains(firstPart, ".") || strings.Contains(firstPart, ":") {
+			// 构建完整的仓库URL
+			if strings.Contains(firstPart, ":") && !strings.Contains(firstPart, "://") {
+				// 包含端口，假设是http
+				return "http://" + firstPart
+			} else if !strings.Contains(firstPart, "://") {
+				// 不包含协议，假设是https
+				return "https://" + firstPart
+			}
+			return firstPart
+		}
+	}
+	
+	// 如果没有明确的仓库地址，返回空字符串（表示使用默认的Docker Hub）
+	return ""
 }

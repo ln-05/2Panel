@@ -6,5 +6,7 @@ type ServiceGroup struct {
 	DockerNetworkService
 	DockerVolumeService
 	DockerRegistryService
-	RegistrySyncService
+	DockerConfigService
+	DockerOverviewService
+	DockerDiagnosticService
 }

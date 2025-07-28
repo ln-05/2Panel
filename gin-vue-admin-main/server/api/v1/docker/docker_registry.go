@@ -220,22 +220,3 @@ func (d *DockerRegistryApi) SetDefaultRegistry(c *gin.Context) {
 	response.OkWithMessage("设置成功", c)
 }
 
-// SyncFrom1Panel 从1Panel同步仓库数据
-// @Tags Docker仓库管理
-// @Summary 从1Panel同步仓库数据
-// @Security ApiKeyAuth
-// @accept application/json
-// @Produce application/json
-// @Success 200 {object} response.Response{msg=string} "同步成功"
-// @Router /docker/registries/sync [post]
-func (d *DockerRegistryApi) SyncFrom1Panel(c *gin.Context) {
-	// 调用服务层同步数据
-	err := registrySyncService.SyncFrom1Panel()
-	if err != nil {
-		global.GVA_LOG.Error("从1Panel同步仓库数据失败", zap.Error(err))
-		response.FailWithMessage("同步失败: "+err.Error(), c)
-		return
-	}
-
-	response.OkWithMessage("同步成功", c)
-}

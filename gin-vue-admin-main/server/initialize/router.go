@@ -62,7 +62,7 @@ func Routers() *gin.Engine {
 	// Router.Static("/assets", "./dist/assets")   // dist里面的静态资源
 	// Router.StaticFile("/", "./dist/index.html") // 前端网页入口页面
 
-	Router.StaticFS(global.GVA_CONFIG.Local.StorePath, justFilesFilesystem{http.Dir(global.GVA_CONFIG.Local.StorePath)}) // Router.Use(middleware.LoadTls())  // 如果需要使用https 请打开此中间件 然后前往 core/server.go 将启动模式 更变为 Router.RunTLS("端口","你的cre/pem文件","你的key文件")
+	Router.StaticFS("/static", justFilesFilesystem{http.Dir(global.GVA_CONFIG.Local.StorePath)}) // Router.Use(middleware.LoadTls())  // 如果需要使用https 请打开此中间件 然后前往 core/server.go 将启动模式 更变为 Router.RunTLS("端口","你的cre/pem文件","你的key文件")
 	// 跨域，如需跨域可以打开下面的注释
 	// Router.Use(middleware.Cors()) // 直接放行全部跨域请求
 	// Router.Use(middleware.CorsByRules()) // 按照配置的规则放行跨域请求
@@ -72,8 +72,8 @@ func Routers() *gin.Engine {
 	global.GVA_LOG.Info("register swagger handler")
 	// 方便统一添加路由组前缀 多服务器上线使用
 
-	PublicGroup := Router.Group("/")
-	PrivateGroup := Router.Group("/")
+	PublicGroup := Router.Group(global.GVA_CONFIG.System.RouterPrefix)
+	PrivateGroup := Router.Group(global.GVA_CONFIG.System.RouterPrefix)
 
 	PrivateGroup.Use(middleware.JWTAuth()).Use(middleware.CasbinHandler())
 
@@ -89,6 +89,8 @@ func Routers() *gin.Engine {
 	{
 		systemRouter.InitBaseRouter(PublicGroup) // 注册基础功能路由 不做鉴权
 		systemRouter.InitInitRouter(PublicGroup) // 自动初始化相关
+		dockerRouter.InitDockerOverviewPublicRouter(PublicGroup) // Docker概览公开路由（用于测试）
+		dockerRouter.InitDockerDiagnosticPublicRouter(PublicGroup) // Docker诊断公开路由（用于测试）
 	}
 
 	{
@@ -111,7 +113,10 @@ func Routers() *gin.Engine {
 		dockerRouter.InitDockerImageRouter(PrivateGroup)                    // Docker镜像管理路由
 		dockerRouter.InitDockerNetworkRouter(PrivateGroup)                  // Docker网络管理路由
 		dockerRouter.InitDockerVolumeRouter(PrivateGroup)                   // Docker存储卷管理路由
+		dockerRouter.InitDockerOrchestrationRouter(PrivateGroup)            // Docker编排管理路由
 		dockerRouter.InitDockerRegistryRouter(PrivateGroup)                 // Docker仓库管理路由
+		dockerRouter.InitDockerConfigRouter(PrivateGroup)                   // Docker配置管理路由
+		// dockerRouter.InitDockerOverviewRouter(PrivateGroup)                 // Docker概览管理路由 (临时注释，使用公开路由测试)
 		exampleRouter.InitCustomerRouter(PrivateGroup)                      // 客户路由
 		exampleRouter.InitFileUploadAndDownloadRouter(PrivateGroup)         // 文件上传下载功能路由
 		exampleRouter.InitAttachmentCategoryRouterRouter(PrivateGroup)      // 文件上传下载分类

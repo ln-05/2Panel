@@ -59,10 +59,3 @@ export const setDefaultRegistry = (id) => {
   })
 }
 
-// 从1Panel同步仓库数据
-export const syncFrom1Panel = () => {
-  return service({
-    url: '/docker/registries/sync',
-    method: 'post'
-  })
-}

@@ -6,9 +6,6 @@
         <el-button type="primary" @click="handleCreate">
           添加仓库
         </el-button>
-        <el-button type="success" @click="handleSync">
-          从1Panel同步
-        </el-button>
       </div>
       <div class="search-box">
         <el-input
@@ -188,8 +185,7 @@ import {
   updateRegistry,
   deleteRegistry,
   testRegistry,
-  setDefaultRegistry,
-  syncFrom1Panel
+  setDefaultRegistry
 } from '@/api/dockerRegistry'
 
 // 响应式数据
@@ -488,53 +484,7 @@ const handleSubmit = async () => {
   }
 }
 
-// 从1Panel同步数据
-const handleSync = async () => {
-  try {
-    await ElMessageBox.confirm('确定要从1Panel同步仓库数据吗？这将会导入1Panel中配置的仓库信息。', '确认同步', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      type: 'info'
-    })
-    
-    loading.value = true
-    const res = await syncFrom1Panel()
-    
-    if (res.code === 0) {
-      ElMessage.success('同步成功')
-      // 刷新列表
-      await getList()
-    } else {
-      ElMessage.error(`同步失败: ${res.msg || '未知错误'}`)
-    }
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('同步失败:', error)
-      let errorMessage = '同步失败'
-      
-      if (error.response) {
-        const status = error.response.status
-        const data = error.response.data
-        
-        if (status === 404) {
-          errorMessage = '未找到1Panel数据库或表结构不匹配'
-        } else if (status === 500) {
-          errorMessage = '服务器错误，请检查1Panel数据库连接'
-        } else {
-          errorMessage = `同步失败 (${status}): ${data?.msg || '未知错误'}`
-        }
-      } else if (error.request) {
-        errorMessage = '网络连接失败，请检查网络连接'
-      } else {
-        errorMessage = `同步失败: ${error.message}`
-      }
-      
-      ElMessage.error(errorMessage)
-    }
-  } finally {
-    loading.value = false
-  }
-}
+
 
 // 重置表单
 const resetForm = () => {

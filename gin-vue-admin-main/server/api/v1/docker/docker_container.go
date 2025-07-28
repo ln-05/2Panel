@@ -306,7 +306,7 @@ func (d *DockerContainerApi) GetDockerInfo(c *gin.Context) {
 func (d *DockerContainerApi) CheckDockerStatus(c *gin.Context) {
 	// 调用服务层检查Docker状态
 	isAvailable := dockerContainerService.IsDockerAvailable()
-	
+
 	if isAvailable {
 		response.OkWithDetailed(true, "Docker守护进程运行正常", c)
 	} else {

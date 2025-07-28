@@ -24,7 +24,6 @@ func (d *DockerRegistryRouter) InitDockerRegistryRouter(Router *gin.RouterGroup)
 		registryRouter.DELETE("registries/:id", dockerRegistryApi.DeleteRegistry)             // 删除仓库
 		registryRouter.POST("registries/:id/test", dockerRegistryApi.TestRegistry)            // 测试仓库连接
 		registryRouter.POST("registries/:id/default", dockerRegistryApi.SetDefaultRegistry)   // 设置默认仓库
-		registryRouter.POST("registries/sync", dockerRegistryApi.SyncFrom1Panel)              // 从1Panel同步仓库数据
 	}
 
 	// 不需要记录操作的路由（查询类）
