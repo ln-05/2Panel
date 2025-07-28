@@ -87,9 +87,9 @@ func Routers() *gin.Engine {
 		})
 	}
 	{
-		systemRouter.InitBaseRouter(PublicGroup) // 注册基础功能路由 不做鉴权
-		systemRouter.InitInitRouter(PublicGroup) // 自动初始化相关
-		dockerRouter.InitDockerOverviewPublicRouter(PublicGroup) // Docker概览公开路由（用于测试）
+		systemRouter.InitBaseRouter(PublicGroup)                   // 注册基础功能路由 不做鉴权
+		systemRouter.InitInitRouter(PublicGroup)                   // 自动初始化相关
+		dockerRouter.InitDockerOverviewPublicRouter(PublicGroup)   // Docker概览公开路由（用于测试）
 		dockerRouter.InitDockerDiagnosticPublicRouter(PublicGroup) // Docker诊断公开路由（用于测试）
 	}
 
@@ -117,9 +117,11 @@ func Routers() *gin.Engine {
 		dockerRouter.InitDockerRegistryRouter(PrivateGroup)                 // Docker仓库管理路由
 		dockerRouter.InitDockerConfigRouter(PrivateGroup)                   // Docker配置管理路由
 		// dockerRouter.InitDockerOverviewRouter(PrivateGroup)                 // Docker概览管理路由 (临时注释，使用公开路由测试)
-		exampleRouter.InitCustomerRouter(PrivateGroup)                      // 客户路由
-		exampleRouter.InitFileUploadAndDownloadRouter(PrivateGroup)         // 文件上传下载功能路由
-		exampleRouter.InitAttachmentCategoryRouterRouter(PrivateGroup)      // 文件上传下载分类
+
+		systemRouter.InitDatabaseRouter(PublicGroup)                   // 数据库管理路由
+		exampleRouter.InitCustomerRouter(PrivateGroup)                 // 客户路由
+		exampleRouter.InitFileUploadAndDownloadRouter(PrivateGroup)    // 文件上传下载功能路由
+		exampleRouter.InitAttachmentCategoryRouterRouter(PrivateGroup) // 文件上传下载分类
 
 	}
 
